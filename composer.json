@@ -1,0 +1,41 @@
+{
+    "name": "rindow/rindow-aop",
+    "type": "library",
+    "description": "Support Aspect-Oriented Programming",
+    "keywords": ["rindow","framework","aop"],
+    "license": "BSD-3-Clause",
+    "require": {
+        "php": ">=5.3.3",
+        "rindow/rindow-event": "*",
+        "rindow/rindow-container": "*",
+        "rindow/rindow-stdlib": "*",
+        "interop-phpobjects/lenient-aop": "*"
+    },
+    "require-dev": {
+        "rindow/rindow-event": "*",
+        "rindow/rindow-container": "*",
+        "rindow/rindow-stdlib": "*",
+        "rindow/rindow-annotation": "*"
+    },
+    "suggest": {
+        "rindow/rindow-annotation": "When using annotation"
+    },
+    "autoload": {
+        "psr-0": {
+            "Rindow\\Aop\\": "src/"
+        }
+    },
+
+    "repositories": [
+        {
+            "type": "composer",
+            "url": "https://rindow.github.io/rindow-packagist/packages.json",
+            "options": {
+                "ssl": {
+                    "verify_peer": "true"
+                }
+            }
+        }
+    ],
+    "minimum-stability": "dev"
+}
