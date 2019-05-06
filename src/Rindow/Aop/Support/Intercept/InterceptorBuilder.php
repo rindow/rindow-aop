@@ -3,19 +3,26 @@ namespace Rindow\Aop\Support\Intercept;
 
 use ReflectionClass;
 use ReflectionException;
-use Rindow\Stdlib\Cache\CacheFactory;
 use Rindow\Aop\Exception;
+use Rindow\Aop\Support\Intercept\CodeStore\Filesystem;
+use Rindow\Aop\Support\Intercept\CodeStore\CacheStorage;
 
 class InterceptorBuilder
 {
     const MODE_INTERFACE   = 'interface';
     const MODE_INHERITANCE = 'inheritance';
-
+    const MODE_CODELOADING_EVAL = 'eval';
+    const MODE_CODELOADING_FILE = 'file';
+    protected $codeLoadingMode = self::MODE_CODELOADING_FILE;
+    protected $filePath;
+    protected $configCacheFactory;
+    protected $codeStore;
     protected $config;
-    protected $strage;
 
-    public function __construct($config = null)
+    public function __construct($filePath=null,$configCacheFactory=null,$config=null)
     {
+        $this->filePath = $filePath;
+        $this->configCacheFactory = $configCacheFactory;
         if($config)
             $this->setConfig($config);
     }
@@ -23,19 +30,28 @@ class InterceptorBuilder
     public function setConfig($config)
     {
         $this->config = $config;
-        if(isset($config['codeCacheFactory'])) {
-            $factory = $config['codeCacheFactory'];
-            if(isset($config['codeCacheFactoryArgs']))
-                $factoryArgs = $config['codeCacheFactoryArgs'];
-            else
-                $factoryArgs = array(__CLASS__);
-            $this->strage = call_user_func_array($factory,$factoryArgs);
+        if(isset($config['codeLoadingMode'])) {
+            $this->codeLoadingMode = $config['codeLoadingMode'];
         }
+        if(isset($config['cacheFilePath'])) {
+            $this->filePath = $config['cacheFilePath'];
+        }
+    }
+
+    public function getCodeStore()
+    {
+        if($this->codeStore)
+            return $this->codeStore;
+        if($this->codeLoadingMode==self::MODE_CODELOADING_EVAL)
+            $this->codeStore = new CacheStorage($this->filePath,$this->configCacheFactory);
+        else
+            $this->codeStore = new Filesystem($this->filePath,$this->configCacheFactory);
+        return $this->codeStore;
     }
 
     public function getInterceptorDeclare($className,$mode=null)
     {
-        if($mode==null || $mode===true || $mode===self::MODE_INHERITANCE)
+        if($mode===null || $mode===true || $mode===self::MODE_INHERITANCE)
             return $this->getInheritanceBasedInterceptorDeclare($className,$mode);
         else if($mode===self::MODE_INTERFACE)
             return $this->getInterfaceBasedInterceptorDeclare($className,$mode);
@@ -344,58 +360,17 @@ EOD;
 
     public function buildInterceptor($className,$mode)
     {
-        $key = $this->getInterceptorFileName($className,$mode);
-        if(!$this->hasCode($key)) {
+        $codeStore = $this->getCodeStore();
+        $interceptorClassName = $this->getInterceptorClassName($className,$mode);
+        $key = $codeStore->getInterceptorStoreKey($interceptorClassName);
+        if(!$codeStore->hasCode($key)) {
             $code = $this->getInterceptorDeclare($className,$mode);
-            $this->saveCode($key, $code);
+            $codeStore->saveCode($key, $code);
         }
-        $interceptorClass = $this->getInterceptorClassName($className,$mode);
-        if(!class_exists($interceptorClass))
-            $this->loadCode($key);
-    }
-
-    public function getInterceptorFileName($className,$mode)
-    {
-        if($this->strage) {
-            $key = 'interceptors\\'.$this->getInterceptorClassName($className,$mode);
-            return $key;
-        }
-        $key = '/' . str_replace('\\', '/', __CLASS__.'\\interceptors\\'.$this->getInterceptorClassName($className,$mode)) . '.php';
-        return CacheFactory::$fileCachePath . $key;
-    }
-
-    public function saveCode($key, $code)
-    {
-        if($this->strage) {
-            if(strpos($code, '<?php')!==0)
-                throw new Exception\DomainException('Interceptor code is invalid.');
-            $code = ltrim(substr($code,5));
-            if(strpos($code, 'namespace ')!==0)
-                throw new Exception\DomainException('Interceptor code is invalid.');
-            $this->strage->put($key,$code);
-            return;
-        }
-        if(!is_dir(dirname($key))) {
-            $dirname = dirname($key);
-            mkdir(dirname($key),0777,true);
-        }
-        file_put_contents($key, $code);
-    }
-
-    public function loadCode($key)
-    {
-        if($this->strage) {
-            $code = $this->strage->get($key);
-            eval($code);
-            return;
-        }
-        require_once $key;
-    }
-
-    public function hasCode($key)
-    {
-        if($this->strage)
-            return $this->strage->containsKey($key);
-        return file_exists($key);
+        // *** CAUTION ****
+        // It duplicate interceptor class name when unit test.
+        // Because It use the same class name many times.
+        if(!class_exists($interceptorClassName))
+            $codeStore->loadCode($key);
     }
 }

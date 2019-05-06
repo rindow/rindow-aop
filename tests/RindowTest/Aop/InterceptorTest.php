@@ -16,6 +16,8 @@ use Rindow\Container\ComponentDefinition;
 use Rindow\Container\ProxyManager;
 use Rindow\Aop\Support\Pointcut\PointcutManager;
 use Rindow\Annotation\AnnotationManager;
+use Rindow\Stdlib\Cache\SimpleCache\FileCache;
+use Rindow\Stdlib\Cache\ConfigCache\ConfigCacheFactory;
 
 class TestLogger
 {
@@ -246,9 +248,8 @@ class Test extends TestCase
 {
     public function setUp()
     {
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
-        \Rindow\Stdlib\Cache\CacheFactory::clearCache();
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
+        $cache = new FileCache(array('path'=>RINDOW_TEST_CACHE));
+        $cache->clear();
         global $BaseClass3Initialized;
         unset($BaseClass3Initialized);
     }
@@ -263,6 +264,7 @@ class Test extends TestCase
         $builder->setConstructorArgs($arguments);
         return $builder->getMock();
     }
+
 /*
     public function testExecutionInterfaceBased1()
     {
@@ -776,7 +778,7 @@ class Test extends TestCase
                 ->method('getClassName')
                 ->will($this->returnValue($componentName));
 
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($componentName,'inheritance');
         //exit;
         //include_once $builder->getInterceptorFileName($componentName,'inheritance');
@@ -893,7 +895,7 @@ class Test extends TestCase
         $component = new TestComponentDefinition($logger,__NAMESPACE__.'\TestBaseClass','testComponent');
         $eventManager = new TestEventManager($logger,$baseClass);
         $adviceManager = new TestAdviceManager($logger,$eventManager);
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor(__NAMESPACE__.'\TestBaseClass','inheritance');
 
         $interceptorName = $builder->getInterceptorClassName(__NAMESPACE__.'\TestBaseClass','inheritance');
@@ -947,7 +949,7 @@ class Test extends TestCase
                 ->method('getClassName')
                 ->will($this->returnValue($componentName));
 
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($componentName,'inheritance');
         //exit;
         //include_once $builder->getInterceptorFileName($componentName,'inheritance');
@@ -1064,7 +1066,7 @@ class Test extends TestCase
         $component = new TestComponentDefinition($logger,__NAMESPACE__.'\TestBaseClassWithConstructor','testComponent');
         $eventManager = new TestEventManager($logger,$baseClass);
         $adviceManager = new TestAdviceManager($logger,$eventManager);
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor(__NAMESPACE__.'\TestBaseClassWithConstructor','inheritance');
 
         $interceptorName = $builder->getInterceptorClassName(__NAMESPACE__.'\TestBaseClassWithConstructor','inheritance');
@@ -1147,7 +1149,7 @@ class Test extends TestCase
                 ->method('getClassName')
                 ->will($this->returnValue($componentName));
 
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($componentName,'inheritance');
         //exit;
         //include_once $builder->getInterceptorFileName($componentName,'inheritance');
@@ -1178,7 +1180,7 @@ class Test extends TestCase
         $componentName = __NAMESPACE__ . '\BaseClass2';
         $component = $this->createTestMock('Rindow\Container\ComponentDefinition');
 
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($componentName,'inheritance');
         //exit;
         //include_once $builder->getInterceptorFileName($componentName,'inheritance');
@@ -1203,7 +1205,7 @@ class Test extends TestCase
         $component = new TestComponentDefinition($logger,__NAMESPACE__.'\TestBaseClass','testComponent');
         $eventManager = new TestEventManager($logger,$baseClass);
         $adviceManager = new TestAdviceManager($logger,$eventManager);
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor(__NAMESPACE__.'\TestBaseClass','inheritance');
 
         $interceptorName = $builder->getInterceptorClassName(__NAMESPACE__.'\TestBaseClass','inheritance');
@@ -1234,7 +1236,7 @@ class Test extends TestCase
         $container->setProxyManager($aop);
         $component = $container->getComponentManager()->newComponent($componentName);
 
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($componentName,'inheritance');
         //include_once $builder->getInterceptorFileName($componentName,'inheritance');
 
@@ -1353,7 +1355,7 @@ class Test extends TestCase
         $component = $container->getComponentManager()->getComponent(__NAMESPACE__.'\TestBaseClassWithConstructor');
         $eventManager = new TestEventManager($logger,$baseClass);
         $adviceManager = new TestAdviceManager($logger,$eventManager);
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor(__NAMESPACE__.'\TestBaseClassWithConstructor','inheritance');
 
         $interceptorName = $builder->getInterceptorClassName(__NAMESPACE__.'\TestBaseClassWithConstructor','inheritance');
@@ -1412,7 +1414,7 @@ class Test extends TestCase
         $container->setProxyManager($aop);
         $component = $container->getComponentManager()->newComponent($componentName);
 
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($componentName,'inheritance');
         //include_once $builder->getInterceptorFileName($componentName,'inheritance');
 
@@ -1543,7 +1545,7 @@ class Test extends TestCase
         $component = $container->getComponentManager()->getComponent(__NAMESPACE__.'\TestBaseClassWithConstructor');
         $eventManager = new TestEventManager($logger,$baseClass);
         $adviceManager = new TestAdviceManager($logger,$eventManager);
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor(__NAMESPACE__.'\TestBaseClassWithConstructor','inheritance');
 
         $interceptorName = $builder->getInterceptorClassName(__NAMESPACE__.'\TestBaseClassWithConstructor','inheritance');
@@ -1639,11 +1641,11 @@ class Test extends TestCase
         $container->setProxyManager($aop);
         $component = $container->getComponentManager()->newComponent($componentName);
 
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($componentName,'inheritance');
         //include_once $builder->getInterceptorFileName($componentName,'inheritance');
 
-        $adviceManager = new AdviceManager(new PointcutManager(),$container);
+        $adviceManager = $aop->getAdviceManager();
 
         $interceptorName = $builder->getInterceptorClassName($componentName,'inheritance');
         $interceptor = new $interceptorName($container,$component,$adviceManager,true);
@@ -1676,7 +1678,7 @@ class Test extends TestCase
         $container->setProxyManager($aop);
         $component = $container->getComponentManager()->getComponent($componentName);
 
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($componentName,'interface');
         //include_once $builder->getInterceptorFileName($componentName,'interface');
 

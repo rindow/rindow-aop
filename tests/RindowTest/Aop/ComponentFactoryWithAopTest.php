@@ -30,9 +30,6 @@ class Test extends TestCase
 {
 	public function setup()
 	{
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
-        \Rindow\Stdlib\Cache\CacheFactory::clearCache();
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
 	}
 
 	public function getConfig($options)
@@ -43,6 +40,7 @@ class Test extends TestCase
 					'Rindow\Aop\Module' => true,
 				),
 				'annotation_manager' => true,
+				'enableCache' => false,
 			),
 			'aop' => array(
 				'intercept_to' => array(

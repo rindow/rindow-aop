@@ -4,14 +4,17 @@ namespace Rindow\Aop\Support\Advice;
 use Rindow\Aop\JoinPointInterface;
 use Rindow\Aop\Support\Pointcut\PointcutManager;
 use Rindow\Aop\Support\Pointcut\Pointcut;
+use Rindow\Aop\Exception;
 use Rindow\Event\EventListener;
 use ArrayObject;
-use Rindow\Stdlib\Cache\CacheHandlerTemplate;
+use Rindow\Stdlib\Cache\ConfigCache\ConfigCacheFactory;
 /*use Rindow\Container\ServiceLocator;*/
 
 class AdviceManager
 {
-    protected $cacheHandler;
+    protected $configCacheFactory;
+    protected $queryCache;
+    protected $repositoryCache;
     protected $pointcutManager;
     protected $serviceLocator;
     protected $adviceContextStatus = false;
@@ -20,9 +23,13 @@ class AdviceManager
 
     public function __construct(
         PointcutManager $pointcutManager = null,
-        /*ServiceLocator*/ $serviceLocator=null)
+        /*ServiceLocator*/ $serviceLocator=null,
+        $configCacheFactory=null)
     {
-        $this->cacheHandler = new CacheHandlerTemplate(__CLASS__);
+        if($configCacheFactory)
+            $this->configCacheFactory = $configCacheFactory;
+        else
+            $this->configCacheFactory = new ConfigCacheFactory(array('enableCache'=>false));
         if($pointcutManager)
             $this->setPointcutManager($pointcutManager);
         if($serviceLocator)
@@ -51,23 +58,27 @@ class AdviceManager
 
     protected function getQueryCache()
     {
-        return $this->cacheHandler->getCache('query');
+        if($this->queryCache==null)
+            $this->queryCache = $this->configCacheFactory->create(__CLASS__.'/query');
+        return $this->queryCache;
     }
 
     public function getRepository()
     {
-        return $this->cacheHandler->getCache('repository',$forceFileCache=true);
+        if($this->repositoryCache==null)
+            $this->repositoryCache = $this->configCacheFactory->create(__CLASS__.'/repository',$forceFileCache=true);
+        return $this->repositoryCache;
     }
 
-    public function setEnableCache($enableCache=true)
-    {
-        $this->cacheHandler->setEnableCache($enableCache);
-    }
+    //public function setEnableCache($enableCache=true)
+    //{
+    //    $this->configCacheFactory->setEnableCache($enableCache);
+    //}
 
-    public function setCachePath($cachePath)
-    {
-        $this->cacheHandler->setCachePath($cachePath);
-    }
+    //public function setCachePath($cachePath)
+    //{
+    //    $this->configCacheFactory->setCachePath($cachePath);
+    //}
 
     public function setLogger($logger)
     {
@@ -132,7 +143,7 @@ class AdviceManager
                 $advices = array($advice);
             else
                 $advices[] = $advice;
-            $repository->put($index,$advices);
+            $repository->set($index,$advices);
         }
     }
 
@@ -190,7 +201,7 @@ class AdviceManager
     protected function generateAndCachingEventCollection($index,$advices)
     {
         $cache = $this->getQueryCache();
-        $cache[$index] = $advices;
+        $cache->set($index,$advices);
         $eventCollection = $this->generateAdviceEventCollection($advices);
         return $this->adviceEventCollections[$index] = $eventCollection;
     }
@@ -209,6 +220,8 @@ class AdviceManager
         }
 
         $pointcuts = $this->getPointcutManager()->find($joinpoint);
+        if(!is_array($pointcuts))
+            throw new Exception\DomainException('joinpoint not found: '.$joinpoint->toString());
         $matchedAdvices = array();
         foreach ($pointcuts as $pointcut) {
             $advices = $this->getAdvices($pointcut);

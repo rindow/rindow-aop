@@ -16,7 +16,7 @@ use Rindow\Aop\Anotation\After;
 use Rindow\Aop\Anotation\AfterReturning;
 use Rindow\Aop\Anotation\AfterThrowing;
 use Rindow\Aop\Anotation\Around;
-
+use Rindow\Stdlib\Cache\ConfigCache\ConfigCacheFactory;
 
 interface Param0Interface
 {
@@ -361,9 +361,6 @@ class Test extends TestCase
 
     public function setUp()
     {
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
-        \Rindow\Stdlib\Cache\CacheFactory::clearCache();
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
     }
 
     public function getPatterns($aop)
@@ -379,6 +376,27 @@ class Test extends TestCase
             }
         }
         return $patterns;
+    }
+
+    public function getConfigCacheFactory()
+    {
+        $config = array(
+                //'fileCachePath'   => __DIR__.'/../cache',
+                'configCache' => array(
+                    'enableMemCache'  => true,
+                    'enableFileCache' => true,
+                    'forceFileCache'  => false,
+                ),
+                //'apcTimeOut'      => 20,
+                'memCache' => array(
+                    'class' => 'Rindow\Stdlib\Cache\SimpleCache\ArrayCache',
+                ),
+                'fileCache' => array(
+                    'class' => 'Rindow\Stdlib\Cache\SimpleCache\ArrayCache',
+                ),
+        );
+        $configCacheFactory = new ConfigCacheFactory($config);
+        return $configCacheFactory;
     }
 
     public function getPlainAspectConfig()
@@ -691,6 +709,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'aspects' => array(
@@ -808,6 +827,7 @@ class Test extends TestCase
                     'Rindow\Aop\Module' => true,
                 ),
                 //'annotation_manager' => true,
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
@@ -891,6 +911,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
@@ -929,6 +950,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
@@ -963,6 +985,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'disable_interceptor_event' => true,
@@ -1005,6 +1028,7 @@ class Test extends TestCase
 
     public function testAddInterceptTargets()
     {
+        $configCacheFactory = $this->getConfigCacheFactory();
         $config = array(
             'aop' => array(
                 'intercept_to' => array(
@@ -1019,8 +1043,8 @@ class Test extends TestCase
                 ),
             ),
         );
-        $container = new Container($config['container']);
-        $aop = new AopManager($container);
+        $container = new Container($config['container'],null,null,null,null,$configCacheFactory);
+        $aop = new AopManager($container,null,null,null,$configCacheFactory);
         $aop->setConfig($config['aop']);
         $container->setProxyManager($aop);
 
@@ -1041,8 +1065,8 @@ class Test extends TestCase
 
         // cached data
 
-        $container = new Container($config['container']);
-        $aop = new AopManager($container);
+        $container = new Container($config['container'],null,null,null,null,$configCacheFactory);
+        $aop = new AopManager($container,null,null,null,$configCacheFactory);
         $aop->setConfig($config['aop']);
         $container->setProxyManager($aop);
         $this->assertTrue($aop->isInterceptTarget('NamespaceFoo2\Bar2'));
@@ -1055,6 +1079,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to' => array(
@@ -1110,6 +1135,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'disable_interceptor_event' => true,
@@ -1145,6 +1171,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
@@ -1189,6 +1216,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
@@ -1227,6 +1255,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
@@ -1255,6 +1284,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
@@ -1285,6 +1315,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
@@ -1340,6 +1371,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\Aop\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
@@ -1395,6 +1427,7 @@ class Test extends TestCase
                 'modules' => array(
                     'Rindow\\Aop\\Module' => true,
                 ),
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,

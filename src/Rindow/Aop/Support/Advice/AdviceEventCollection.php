@@ -2,7 +2,7 @@
 namespace Rindow\Aop\Support\Advice;
 
 use Iterator;
-/*use Rindow\Container\ServiceLocator;*/
+
 use Rindow\Event\AbstractEventManager;
 use Rindow\Event\EventManagerInterface;
 use Rindow\Event\EventInterface;

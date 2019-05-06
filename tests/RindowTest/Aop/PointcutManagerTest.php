@@ -7,6 +7,7 @@ use Rindow\Aop\Support\Pointcut\PointcutManager;
 use Rindow\Aop\Support\JoinPoint\MethodJoinPoint;
 use Rindow\Aop\Support\Signature;
 use Rindow\Aop\Annotation\Pointcut;
+use Rindow\Stdlib\Cache\ConfigCache\ConfigCacheFactory;
 
 class TestAspect
 {
@@ -34,20 +35,35 @@ class TestPointcutManager extends PointcutManager
 
 class Test extends TestCase
 {
-    public static $backupCacheMode;
     public static function setUpBeforeClass()
     {
-        self::$backupCacheMode = \Rindow\Stdlib\Cache\CacheFactory::$notRegister;
     }
     public static function tearDownAfterClass()
     {
-        \Rindow\Stdlib\Cache\CacheFactory::$notRegister = self::$backupCacheMode;
     }
     public function setUp()
     {
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
-        \Rindow\Stdlib\Cache\CacheFactory::clearCache();
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
+    }
+
+    public function getConfigCacheFactory()
+    {
+        $config = array(
+                //'fileCachePath'   => __DIR__.'/../cache',
+                'configCache' => array(
+                    'enableMemCache'  => true,
+                    'enableFileCache' => true,
+                    'forceFileCache'  => false,
+                ),
+                //'apcTimeOut'      => 20,
+                'memCache' => array(
+                    'class' => 'Rindow\Stdlib\Cache\SimpleCache\ArrayCache',
+                ),
+                'fileCache' => array(
+                    'class' => 'Rindow\Stdlib\Cache\SimpleCache\ArrayCache',
+                ),
+        );
+        $configCacheFactory = new ConfigCacheFactory($config);
+        return $configCacheFactory;
     }
 
 	public function testGenerateFromString()
@@ -149,14 +165,14 @@ class Test extends TestCase
 
 	public function testSaveAndLoad()
 	{
-        $notRegister = \Rindow\Stdlib\Cache\CacheFactory::$notRegister = false;
-        \Rindow\Stdlib\Cache\CacheFactory::$notRegister = false;
+		$configCacheFactory = $this->getConfigCacheFactory();
+
 		$signature = new Signature(
 			SignatureInterface::TYPE_METHOD,
 			__NAMESPACE__.'\TestAspect',
 			'testpointcut'
 		);
-		$manager = new PointcutManager();
+		$manager = new PointcutManager($configCacheFactory);
 		$manager->register(
 			$manager->generate(
 				$signature,
@@ -164,24 +180,22 @@ class Test extends TestCase
 		);
 		$manager->save();
 
-		$manager = new PointcutManager();
+		$manager = new PointcutManager($configCacheFactory);
 		$target = new TestTarget();
 		$joinpoint = new MethodJoinPoint($target,'test');
 		$pointcuts = $manager->find($joinpoint);
 		$this->assertEquals(1,count($pointcuts));
-        \Rindow\Stdlib\Cache\CacheFactory::$notRegister = $notRegister;
 	}
 
 	public function testQueryCache()
 	{
-        $notRegister = \Rindow\Stdlib\Cache\CacheFactory::$notRegister = false;
-        \Rindow\Stdlib\Cache\CacheFactory::$notRegister = false;
+		$configCacheFactory = $this->getConfigCacheFactory();
 		$signature = new Signature(
 			SignatureInterface::TYPE_METHOD,
 			__NAMESPACE__.'\TestAspect',
 			'testpointcut'
 		);
-		$manager = new TestPointcutManager();
+		$manager = new TestPointcutManager($configCacheFactory);
 		$manager->register(
 			$manager->generate(
 				$signature,
@@ -197,7 +211,7 @@ class Test extends TestCase
 
 		$this->assertEquals(1,count($pointcuts));
 
-		$manager = new TestPointcutManager();
+		$manager = new TestPointcutManager($configCacheFactory);
 		$target = new TestTarget();
 		$joinpoint = new MethodJoinPoint($target,'test');
 
@@ -206,6 +220,5 @@ class Test extends TestCase
 		$this->assertFalse($manager->testFlag);
 
 		$this->assertEquals(1,count($pointcuts));
-        \Rindow\Stdlib\Cache\CacheFactory::$notRegister = $notRegister;
 	}
 }

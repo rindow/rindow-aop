@@ -3,7 +3,7 @@ namespace Rindow\Aop;
 
 use ReflectionClass;
 use ArrayObject;
-use Rindow\Stdlib\Cache\CacheHandlerTemplate;
+use Rindow\Stdlib\Cache\ConfigCache\ConfigCacheFactory;
 use Rindow\Container\Container;
 use Rindow\Container\ComponentScanner;
 use Rindow\Container\ComponentDefinition;
@@ -31,7 +31,8 @@ class AopManager implements ProxyManager
     protected $pointcutManager;
     protected $adviceManager;
     protected $aspects = array();
-    protected $cacheHandler;
+    protected $configCacheFactory;
+    protected $aspectCache;
     protected $annotationManager;
     protected $container;
     protected $aspectComponentNames;
@@ -48,23 +49,27 @@ class AopManager implements ProxyManager
         Container $container,
         PointcutManager $pointcutManager=null,
         AdviceManager $adviceManager=null,
-        InterceptorBuilder $interceptorBuilder=null)
+        InterceptorBuilder $interceptorBuilder=null,
+        $configCacheFactory=null)
     {
-        $this->cacheHandler = new CacheHandlerTemplate(__CLASS__);
+        if($configCacheFactory)
+            $this->configCacheFactory = $configCacheFactory;
+        else
+            $this->configCacheFactory = new ConfigCacheFactory(array('enableCache'=>false));
         $this->container = $container;
         $this->getAspectCache();
         if($pointcutManager)
             $this->pointcutManager = $pointcutManager;
         else
-            $this->pointcutManager = new PointcutManager();
+            $this->pointcutManager = new PointcutManager($this->configCacheFactory);
         if($adviceManager)
             $this->adviceManager = $adviceManager;
         else
-            $this->adviceManager = new AdviceManager($this->pointcutManager,$container);
+            $this->adviceManager = new AdviceManager($this->pointcutManager,$container,$this->configCacheFactory);
         if($interceptorBuilder)
             $this->interceptorBuilder = $interceptorBuilder;
         else
-            $this->interceptorBuilder = new InterceptorBuilder();
+            $this->interceptorBuilder = new InterceptorBuilder(null,$this->configCacheFactory);
         $this->annotationManager = $container->getAnnotationManager();
     }
 
@@ -247,23 +252,25 @@ class AopManager implements ProxyManager
 
     public function getAspectCache()
     {
-        return $this->cacheHandler->getCache('aspects',$forceFileCache=true);
+        if($this->aspectCache==null)
+            $this->aspectCache = $this->configCacheFactory->create(__CLASS__.'/aspects',$forceFileCache=true);
+        return $this->aspectCache;
     }
 
-    public function setEnableCache($enableCache=true)
-    {
-        $this->cacheHandler->setEnableCache($enableCache);
-    }
+    //public function setEnableCache($enableCache=true)
+    //{
+    //    $this->cacheHandler->setEnableCache($enableCache);
+    //}
 
-    public function setCachePath($cachePath)
-    {
-        $this->cacheHandler->setCachePath($cachePath);
-    }
+    //public function setCachePath($cachePath)
+    //{
+    //    $this->cacheHandler->setCachePath($cachePath);
+    //}
 
     public function hasScanned()
     {
         $cache = $this->getAspectCache();
-        return isset($cache[self::CACHE_INITIALIZED]);
+        return $cache->has(self::CACHE_INITIALIZED);
     }
 
     public function completedScan()
@@ -271,11 +278,11 @@ class AopManager implements ProxyManager
         $cache = $this->getAspectCache();
         if($this->aspectComponentNames===null)
             $this->aspectComponentNames = array();
-        $cache[self::CACHE_ASPECTCOMPONENTNAME] = $this->aspectComponentNames;
+        $cache->set(self::CACHE_ASPECTCOMPONENTNAME,$this->aspectComponentNames);
         if($this->interceptTargets===null)
             $this->interceptTargets = array();
-        $cache[self::CACHE_INTERCEPTTARGET] = $this->interceptTargets;
-        $cache[self::CACHE_INITIALIZED] = true;
+        $cache->set(self::CACHE_INTERCEPTTARGET,$this->interceptTargets);
+        $cache->set(self::CACHE_INITIALIZED,'initialized');
         $this->pointcutManager->save();
     }
 

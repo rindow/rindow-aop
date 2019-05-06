@@ -3,6 +3,7 @@ namespace RindowTest\Aop\AdviceManagerTest;
 
 use PHPUnit\Framework\TestCase;
 use Rindow\Container\Container;
+use Rindow\Stdlib\Cache\ConfigCache\ConfigCacheFactory;
 use Rindow\Aop\AdviceInterface;
 use Rindow\Aop\SignatureInterface;
 use Rindow\Aop\JoinPointInterface;
@@ -47,9 +48,27 @@ class Test extends TestCase
 {
     public function setUp()
     {
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
-        \Rindow\Stdlib\Cache\CacheFactory::clearCache();
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
+    }
+
+    public function getConfigCacheFactory()
+    {
+        $config = array(
+                //'fileCachePath'   => __DIR__.'/../cache',
+                'configCache' => array(
+                    'enableMemCache'  => true,
+                    'enableFileCache' => true,
+                    'forceFileCache'  => false,
+                ),
+                //'apcTimeOut'      => 20,
+                'memCache' => array(
+                    'class' => 'Rindow\Stdlib\Cache\SimpleCache\ArrayCache',
+                ),
+                'fileCache' => array(
+                    'class' => 'Rindow\Stdlib\Cache\SimpleCache\ArrayCache',
+                ),
+        );
+        $configCacheFactory = new ConfigCacheFactory($config);
+        return $configCacheFactory;
     }
 
 	public function testNormal()
@@ -170,12 +189,13 @@ class Test extends TestCase
 
 	public function testCache()
 	{
+		$configCacheFactory = $this->getConfigCacheFactory();
 		$signature = new Signature(
 			SignatureInterface::TYPE_METHOD,
 			__NAMESPACE__.'\TestAspect',
 			'testpointcut'
 		);
-		$pointcutManager = new PointcutManager();
+		$pointcutManager = new PointcutManager($configCacheFactory);
 		$config = array(
 			'components' => array(
 				__NAMESPACE__.'\TestAspect'=>array(
@@ -183,7 +203,7 @@ class Test extends TestCase
 			),
 		);
 		$container = new Container($config);
-		$adviceManager = new AdviceManager($pointcutManager,$container);
+		$adviceManager = new AdviceManager($pointcutManager,$container,$configCacheFactory);
 
 		$pointcut = $pointcutManager->generate(
 			$signature,
@@ -220,7 +240,7 @@ class Test extends TestCase
 			__NAMESPACE__.'\TestAspect',
 			'testpointcut'
 		);
-		$pointcutManager = new PointcutManager();
+		$pointcutManager = new PointcutManager($configCacheFactory);
 		$config = array(
 			'components' => array(
 				__NAMESPACE__.'\TestAspect'=>array(
@@ -228,7 +248,7 @@ class Test extends TestCase
 			),
 		);
 		$container = new Container($config);
-		$adviceManager = new AdviceManager($pointcutManager,$container);
+		$adviceManager = new AdviceManager($pointcutManager,$container,$configCacheFactory);
 
 		$pointcut = $pointcutManager->generate(
 			$signature,

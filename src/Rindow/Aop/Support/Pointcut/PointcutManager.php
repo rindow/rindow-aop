@@ -4,19 +4,24 @@ namespace Rindow\Aop\Support\Pointcut;
 use ArrayObject;
 use Rindow\Aop\SignatureInterface;
 use Rindow\Aop\MatcherInterface;
-use Rindow\Stdlib\Cache\CacheHandlerTemplate;
+use Rindow\Stdlib\Cache\ConfigCache\ConfigCacheFactory;
 use Rindow\Aop\Exception;
 
 class PointcutManager
 {
-    protected $cacheHandler;
+    protected $configCacheFactory;
+    protected $pointcutsCache;
+    protected $queryCache;
     protected $parser;
     protected $pointcuts;
     protected $logger;
 
-    public function __construct()
+    public function __construct($configCacheFactory=null)
     {
-        $this->cacheHandler = new CacheHandlerTemplate(__CLASS__);
+        if($configCacheFactory)
+            $this->configCacheFactory = $configCacheFactory;
+        else
+            $this->configCacheFactory = new ConfigCacheFactory(array('enableCache'=>false));
     }
 
     public function getParser()
@@ -28,23 +33,27 @@ class PointcutManager
 
     protected function getPointcutsCache()
     {
-        return $this->cacheHandler->getCache('pointcuts',$forceFileCache=true);
+        if($this->pointcutsCache==null)
+            $this->pointcutsCache = $this->configCacheFactory->create(__CLASS__.'/pointcuts',$forceFileCache=true);
+        return $this->pointcutsCache;
     }
 
     protected function getQueryCache()
     {
-        return $this->cacheHandler->getCache('query');
+        if($this->queryCache==null)
+            $this->queryCache = $this->configCacheFactory->create(__CLASS__.'/query');
+        return $this->queryCache;
     }
 
-    public function setEnableCache($enableCache=true)
-    {
-        $this->cacheHandler->setEnableCache($enableCache);
-    }
+    //public function setEnableCache($enableCache=true)
+    //{
+    //    $this->configCacheFactory->setEnableCache($enableCache);
+    //}
 
-    public function setCachePath($cachePath)
-    {
-        $this->cacheHandler->setCachePath($cachePath);
-    }
+    //public function setCachePath($cachePath)
+    //{
+    //    $this->configCacheFactory->setCachePath($cachePath);
+    //}
 
     public function setLogger($logger)
     {
@@ -93,7 +102,7 @@ class PointcutManager
         if($this->pointcuts === null)
             $this->pointcuts = new ArrayObject();
         $cache = $this->getPointcutsCache();
-        $cache['pointcuts'] = $this->pointcuts;
+        $cache->set('pointcuts',$this->pointcuts);
     }
 /*
     public function load()
@@ -146,10 +155,10 @@ class PointcutManager
         $cache = $this->getQueryCache();
         $queryIndex = $this->getQueryIndex($joinpoint);
         $manager = $this;
-        $matched = $cache->get(
+        $matched = $cache->getEx(
             $queryIndex,
-            false,
-            function ($cache,$queryIndex,&$entry) use ($joinpoint,$manager) {
+            function ($cacheKey,$args) {
+                list($joinpoint,$manager) = $args;
                 $matched = array();
                 $pointcuts = $manager->getPointcuts();
                 foreach($pointcuts as $pointcut) {
@@ -159,9 +168,9 @@ class PointcutManager
                             $manager->debug('a pointcut is matched '.$pointcut->getPattern().'.: "'.$joinpoint->getSignatureString().'"');
                     }
                 }
-                $entry = $matched;
-                return true;
-            }
+                return $matched;
+            },
+            array($joinpoint,$this)
         );
         return $matched;
     }

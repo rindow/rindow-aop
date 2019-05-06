@@ -1,10 +1,14 @@
 <?php
 namespace RindowTest\Aop\AspectCollectorTest;
 
+// There is The Aspect Collector in AopManager.
+// So the target of this test is AopManager
+//
+
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Rindow\Container\Container;
-use Rindow\Stdlib\Cache\CacheFactory;
+use Rindow\Stdlib\Cache\ConfigCache\ConfigCacheFactory;
 use Rindow\Annotation\AnnotationManager;
 
 use Rindow\Aop\AopManager;
@@ -108,18 +112,35 @@ class Test extends TestCase
     public static function setUpBeforeClass()
     {
         self::$RINDOW_TEST_RESOURCES = __DIR__.'/../../resources';
-        self::$backupCacheMode = \Rindow\Stdlib\Cache\CacheFactory::$notRegister;
     }
+
     public static function tearDownAfterClass()
     {
-        \Rindow\Stdlib\Cache\CacheFactory::$notRegister = self::$backupCacheMode;
     }
 
     public function setUp()
     {
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
-        \Rindow\Stdlib\Cache\CacheFactory::clearCache();
-        usleep( RINDOW_TEST_CLEAR_CACHE_INTERVAL );
+    }
+
+    public function getConfigCacheFactory()
+    {
+        $config = array(
+                //'fileCachePath'   => __DIR__.'/../cache',
+                'configCache' => array(
+                    'enableMemCache'  => true,
+                    'enableFileCache' => true,
+                    'forceFileCache'  => false,
+                ),
+                //'apcTimeOut'      => 20,
+                'memCache' => array(
+                    'class' => 'Rindow\Stdlib\Cache\SimpleCache\ArrayCache',
+                ),
+                'fileCache' => array(
+                    'class' => 'Rindow\Stdlib\Cache\SimpleCache\ArrayCache',
+                ),
+        );
+        $configCacheFactory = new ConfigCacheFactory($config);
+        return $configCacheFactory;
     }
 
     public function createTestMock($className,$methods = array(), array $arguments = array())
@@ -589,32 +610,27 @@ class Test extends TestCase
 
     public function testScanAspectWithCache()
     {
-        if(!RindowTestCacheIsEnable()) {
-            $this->markTestSkipped('there is no cache.');
-            return;
-        }
+        $configCacheFactory = $this->getConfigCacheFactory();
         
-        $notRegister = \Rindow\Stdlib\Cache\CacheFactory::$notRegister = false;
-        \Rindow\Stdlib\Cache\CacheFactory::$notRegister = false;
     	$config = array(
     		//'annotation_manager' => true,
     		'component_paths' => array(
         		self::$RINDOW_TEST_RESOURCES.'/AcmeTest/Aop/Aspect' => true,
         	),
     	);
-        $am = new AnnotationManager();
+        $am = new AnnotationManager($configCacheFactory);
         $anno = $am->getMetaData('');
-    	$container = new Container($config);
+    	$container = new Container($config,null,null,null,null,$configCacheFactory);
         $container->setAnnotationManager($am);
-    	$aop = new AopManager($container);
+    	$aop = new AopManager($container,null,null,null,$configCacheFactory);
     	$aop->setConfig($config);
     	$container->setProxyManager($aop);
     	$container->scanComponents();
 
-        CacheFactory::$caches = array();
+        // ---- cached --------------------------
 
-    	$container = new Container($config);
-    	$aop = new AopManager($container);
+        $container = new Container($config,null,null,null,null,$configCacheFactory);
+        $aop = new AopManager($container,null,null,null,$configCacheFactory);
     	$aop->setConfig($config);
     	$container->setProxyManager($aop);
 
@@ -627,12 +643,11 @@ class Test extends TestCase
         $this->assertEquals(1,count($advices));
         $this->assertEquals(AdviceInterface::TYPE_BEFORE,$advices[0]->getType());
         $this->assertEquals('AcmeTest\Aop\Aspect\TestAnnotationAspect',$advices[0]->getComponentName());
-        \Rindow\Stdlib\Cache\CacheFactory::$notRegister = $notRegister;
     }
 
     public function testNewProxyNormal()
     {
-        $dummyFile = \Rindow\Stdlib\Cache\CacheFactory::$fileCachePath.'/dummy.php';
+        $dummyFile = RINDOW_TEST_CACHE.'/dummy.php';
         $componentName = __NAMESPACE__.'\TestTarget';
         @unlink($dummyFile);
         $config = array('intercept_to_all'=>true);
@@ -674,7 +689,7 @@ class Test extends TestCase
     {
         $className = __NAMESPACE__.'\TestPlainOldPhpObjectAspect';
         $componentName = 'TestAspect';
-        $config = array (
+        $config = array(
             'intercept_to_all' => true,
             'aspects' => array(
                 $componentName => array(
@@ -704,8 +719,8 @@ class Test extends TestCase
                     $this->equalTo($componentName))
                 ->will($this->returnValue(new $className()));
         $interceptorBuilder = $this->createTestMock('Rindow\Aop\Support\Intercept\InterceptorBuilder');
-        $interceptorBuilder->expects($this->never())
-                ->method('getInterceptorFileName');
+        //$interceptorBuilder->expects($this->never())
+        //        ->method('getInterceptorFileName');
         $interceptorBuilder->expects($this->never())
                 ->method('buildInterceptor');
         $interceptorBuilder->expects($this->never())

@@ -4,8 +4,9 @@ namespace RindowTest\Aop\InterceptorBuilderTest;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use Rindow\Aop\Support\Intercept\InterceptorBuilder;
-use Rindow\Stdlib\Cache\CacheFactory;
 use ArrayObject;
+use Rindow\Stdlib\Cache\ConfigCache\ConfigCacheFactory;
+use Rindow\Stdlib\Cache\SimpleCache\FileCache;
 
 use AcmeTest\Aop\TestArrayCallableInterface;
 use AcmeTest\Aop\HaveArrayCallableClass;
@@ -171,11 +172,18 @@ class Test extends TestCase
     {
         self::$RINDOW_TEST_RESOURCES = __DIR__.'/../../resources';
     }
+
+    public function setUp()
+    {
+        $cache = new FileCache(array('path'=>RINDOW_TEST_CACHE));
+        $cache->clear();
+    }
+
     public function testGetClassDeclare()
     {
         $className = __NAMESPACE__.'\DontHaveInterfeceClass';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -193,7 +201,7 @@ EOD;
 
         $className = __NAMESPACE__.'\HaveInterfaceClass';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -215,7 +223,7 @@ EOD;
 
         $className = __NAMESPACE__.'\HaveInterfaceClass2';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -233,7 +241,7 @@ EOD;
 
         $className = __NAMESPACE__.'\HaveSubInterfaceClass';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -251,7 +259,7 @@ EOD;
 
         $className = __NAMESPACE__.'\HaveArrayClass';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -276,7 +284,7 @@ EOD;
     {
         require_once self::$RINDOW_TEST_RESOURCES.'/AcmeTest/Aop/class_with_callable.php';
         $className = 'AcmeTest\Aop\HaveArrayCallableClass';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace AcmeTest\Aop;
@@ -298,10 +306,9 @@ EOD;
      */
     public function testGetVariadicParameterDeclareOnInterface()
     {
-        CacheFactory::clearCache();
         require_once self::$RINDOW_TEST_RESOURCES.'/AcmeTest/Aop/class_on_interface_with_variadic.php';
         $className = 'AcmeTest\Aop\HaveVariadicParameterInterfaceDecleredClass';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace AcmeTest\Aop;
@@ -329,10 +336,9 @@ EOD;
      */
     public function testGetTypeParameterDeclareOnInterface()
     {
-        CacheFactory::clearCache();
         require_once self::$RINDOW_TEST_RESOURCES.'/AcmeTest/Aop/class_on_interface_with_type.php';
         $className = 'AcmeTest\Aop\HaveTypeParameterInterfaceDecleredClass';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace AcmeTest\Aop;
@@ -360,10 +366,9 @@ EOD;
      */
     public function testGetAllowsNullParameterDeclareOnInterface()
     {
-        CacheFactory::clearCache();
         require_once self::$RINDOW_TEST_RESOURCES.'/AcmeTest/Aop/class_on_interface_with_allows_null.php';
         $className = 'AcmeTest\Aop\HaveAllowsNullParameterInterfaceDecleredClass';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace AcmeTest\Aop;
@@ -386,29 +391,10 @@ EOD;
             'AcmeTest\Aop\HaveAllowsNullParameterInterfaceDecleredClassIFInterceptor'));
     }
 
-    public function testGetFileName()
-    {
-        $fileCachePath = CacheFactory::$fileCachePath;
-        $className = __NAMESPACE__.'\DontHaveInterfeceClass';
-        $builder = new InterceptorBuilder();
-        $this->assertEquals(
-            $fileCachePath.
-            '/Rindow/Aop/Support/Intercept/InterceptorBuilder/interceptors'.
-            '/'.str_replace('\\','/',__NAMESPACE__).'/DontHaveInterfeceClassIFInterceptor.php',
-            $builder->getInterceptorFileName($className,'interface'));
-        $this->assertEquals(
-            $fileCachePath.
-            '/Rindow/Aop/Support/Intercept/InterceptorBuilder/interceptors'.
-            '/'.str_replace('\\','/',__NAMESPACE__).'/DontHaveInterfeceClassIFInterceptor.php',
-            $builder->getInterceptorFileName($className,'interface'));
-
-    }
-
     public function testBuildAndInclude()
     {
-        CacheFactory::clearCache();
         $className = __NAMESPACE__.'\HaveInterfaceClass2';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($className,'interface');
         //$filename = $builder->getInterceptorFileName($className,'interface');
         //include $filename;
@@ -420,7 +406,7 @@ EOD;
     {
         $className = __NAMESPACE__.'\HaveInterfaceClass3';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -492,7 +478,7 @@ EOD;
     {
         $className = __NAMESPACE__.'\NotHaveConstructor';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -542,7 +528,7 @@ EOD;
     {
         $className = __NAMESPACE__.'\HaveProtectedConstructor';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -590,9 +576,8 @@ EOD;
 
     public function testBuildAndIncludeInheritDeclare()
     {
-        CacheFactory::clearCache();
         $className = __NAMESPACE__.'\HaveInterfaceClass3';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($className,'inheritance');
         //$filename = $builder->getInterceptorFileName($className,'inheritance');
         //include $filename;
@@ -604,7 +589,7 @@ EOD;
     {
         $className = __NAMESPACE__.'\HaveStaticFunction';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -630,11 +615,10 @@ EOD;
 
     public function testStaticAndFinalWithInterfaceInclude()
     {
-        CacheFactory::clearCache();
         $a = new HaveStaticFunction();
         
         $className = __NAMESPACE__.'\HaveStaticFunction';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($className,'interface');
         //$filename = $builder->getInterceptorFileName($className,'interface');
         //include $filename;
@@ -647,7 +631,7 @@ EOD;
     {
         $className = __NAMESPACE__.'\HaveStaticFunction';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -672,10 +656,9 @@ EOD;
     }
     public function testStaticAndFinalWithInheritInclude()
     {
-        CacheFactory::clearCache();
         
         $className = __NAMESPACE__.'\HaveStaticFunction';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($className,'inheritance');
         //$filename = $builder->getInterceptorFileName($className,'inheritance');
         //include $filename;
@@ -688,7 +671,7 @@ EOD;
     {
         $className = __NAMESPACE__.'\HaveAbstractFunction';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -716,7 +699,7 @@ EOD;
     {
         $className = __NAMESPACE__.'\HaveReferenceParam';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -738,10 +721,9 @@ EOD;
 
     public function testHaveReferenceParamWithInterfaceInclude()
     {
-        CacheFactory::clearCache();
         
         $className = __NAMESPACE__.'\HaveReferenceParam';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($className,'interface');
         //$filename = $builder->getInterceptorFileName($className,'interface');
         //include $filename;
@@ -753,7 +735,7 @@ EOD;
     {
         $className = __NAMESPACE__.'\SubInternal';
         $testnamespace = __NAMESPACE__;
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $result = <<<EOD
 <?php
 namespace ${testnamespace};
@@ -775,17 +757,19 @@ EOD;
 */
     public function testCacheMode1()
     {
-        CacheFactory::clearCache();
+        $cacheConfig = array(
+            'filePath'=>RINDOW_TEST_CACHE,
+        );
+        $factory = new ConfigCacheFactory($cacheConfig);
         $config = array(
-            'codeCacheFactory' => 'Rindow\Stdlib\Cache\CacheFactory::getInstance',
         );
         $className = __NAMESPACE__.'\CacheMode1';
-        $builder = new InterceptorBuilder();
+        $builder = new InterceptorBuilder(null,$factory,$config);
         $builder->setConfig($config);
         $builder->buildInterceptor($className,'inheritance');
         $this->assertTrue(class_exists(
             __NAMESPACE__.'\CacheMode1IHInterceptor'));
-        $filename = $builder->getInterceptorFileName($className,'inheritance');
+        $filename = $builder->getCodeStore()->getInterceptorStoreKey($className,'inheritance');
         $this->assertFalse(file_exists($filename));
     }
 }
