@@ -17,7 +17,7 @@ before_install:
   - phpenv config-add tests/travis/php$TRAVIS_PHP_VERSION.ini
 
 install:
-  - composer install
+  - export TRAVIS_PHP_VERSION; sh tests/travis/install-script.sh
 
 script: 
-  - phpunit -c tests
+  - sh tests/travis/run-test.sh
