@@ -1,17 +1,22 @@
 language: php
 
 php:
-    - '5.4'
-    - '5.5'
     - '5.6'
-    - '7.0'
     - '7.1'
     - '7.2'
+    - '7.3'
+    - '7.4'
 
 matrix:
   include:
     - php: '5.3'
       dist: precise
+    - php: '5.4'
+      dist: trusty
+    - php: '5.5'
+      dist: trusty
+    - php: '7.0'
+      dist: trusty
 
 before_install:
   - phpenv config-add tests/travis/php$TRAVIS_PHP_VERSION.ini
@@ -19,5 +24,5 @@ before_install:
 install:
   - export TRAVIS_PHP_VERSION; sh tests/travis/install-script.sh
 
-script: 
-  - sh tests/travis/run-test.sh
+script:
+  - TRAVIS_SKIP_TEST=1; export TRAVIS_SKIP_TEST; sh tests/travis/run-test.sh

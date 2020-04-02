@@ -6,15 +6,15 @@
     "license": "BSD-3-Clause",
     "require": {
         "php": ">=5.3.3",
-        "rindow/rindow-event": "*",
-        "rindow/rindow-container": "*",
-        "rindow/rindow-stdlib": "*",
+        "rindow/rindow-event": "1.*",
+        "rindow/rindow-container": "1.*",
+        "rindow/rindow-stdlib": "1.*",
         "interop-phpobjects/lenient-aop": "*"
     },
     "require-dev": {
-        "rindow/rindow-event": "*",
-        "rindow/rindow-container": "*",
-        "rindow/rindow-stdlib": "*",
+        "rindow/rindow-event": "1.*",
+        "rindow/rindow-container": "1.*",
+        "rindow/rindow-stdlib": "1.*",
         "rindow/rindow-annotation": "*"
     },
     "suggest": {
@@ -24,18 +24,5 @@
         "psr-0": {
             "Rindow\\Aop\\": "src/"
         }
-    },
-
-    "repositories": [
-        {
-            "type": "composer",
-            "url": "https://rindow.github.io/rindow-packagist/packages.json",
-            "options": {
-                "ssl": {
-                    "verify_peer": "true"
-                }
-            }
-        }
-    ],
-    "minimum-stability": "dev"
+    }
 }

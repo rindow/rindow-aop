@@ -3,6 +3,7 @@ namespace Rindow\Aop\Support\Intercept;
 
 use ReflectionClass;
 use ReflectionException;
+use ReflectionNamedType;
 use Rindow\Aop\Exception;
 use Rindow\Aop\Support\Intercept\CodeStore\Filesystem;
 use Rindow\Aop\Support\Intercept\CodeStore\CacheStorage;
@@ -65,7 +66,12 @@ class InterceptorBuilder
             if(!$ref->hasType())
                 return null;
             $type = $ref->getType();
-            return ($type->isBuiltin()?'':'\\').strval($type);
+            if(version_compare(PHP_VERSION, '7.1.0')<0) {
+                return ($type->isBuiltin()?'':'\\').strval($type);
+            }
+            if($type instanceof ReflectionNamedType) {
+                return ($type->isBuiltin()?'':'\\').$type->getName();
+            }
         }
         if($ref->isArray()) {
             return 'array';
@@ -223,9 +229,17 @@ EOD;
         if(!$methodRef->hasReturnType())
             return '';
         $returnType = $methodRef->getReturnType();
-        return ':'.($returnType->allowsNull()?'?':'').
-                ($returnType->isBuiltin()?'':'\\').
-                strval($returnType);
+        if(version_compare(PHP_VERSION, '7.1.0')<0) {
+            return ':'.($returnType->allowsNull()?'?':'').
+                    ($returnType->isBuiltin()?'':'\\').
+                    strval($returnType);
+        }
+        if($returnType instanceof ReflectionNamedType) {
+            return ':'.($returnType->allowsNull()?'?':'').
+                    ($returnType->isBuiltin()?'':'\\').
+                    $returnType->getName();
+        }
+        return '';
     }
 
     protected function getCallParams($methodRef,$array=false)

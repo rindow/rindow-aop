@@ -10,6 +10,7 @@ use Rindow\Aop\Support\Intercept\InterceptorBuilder;
 use Rindow\Aop\Support\Intercept\Interceptor;
 use Rindow\Aop\Support\JoinPoint\MethodJoinPoint;
 use Rindow\Aop\Support\JoinPoint\PropertyJoinPoint;
+use Rindow\Aop\AopManager;
 use Rindow\Container\Container;
 use Rindow\Container\Annotation\Proxy;
 use Rindow\Container\ComponentDefinition;
@@ -38,23 +39,53 @@ class TestLogger
     {
         $this->log = array();
     }
+    public function str($value)
+    {
+        if($value===null) {
+            $strValue = 'null';
+        } elseif(is_bool($value)) {
+            $strValue = $value ? 'true':'false';
+        } elseif(is_object($value)) {
+            $strValue = get_class($value);
+        } elseif(is_array($value)) {
+            $strValue = null;
+            foreach($value as $v) {
+                if($strValue==null) $strValue = '[';
+                else                $strValue .= ',';
+                $strValue .= $this->str($v);
+            }
+            $strValue .= ']';
+        } else {
+            $strValue = $value;
+        }
+        return $strValue;
+    }
 }
 
 class TestContainer extends Container
 {
     protected $logger;
     protected $baseClass;
-    public function __construct($logger,$baseClass)
+    protected $alterParams;
+    public function __construct($logger,$baseClass,array $alterParams=null)
     {
         $this->logger = $logger;
         $this->baseClass = $baseClass;
+        $this->alterParams = $alterParams;
     }
     public function instantiate(ComponentDefinition $component,$componentName=null,ComponentDefinition $declaration=null,$instance=null,$alternateConstructor=null)
     {
-        $this->logger->logging('Container::instantiate('.$component->testClassName.','.gettype($componentName).','.gettype($declaration).','.(is_object($instance)?get_class($instance):gettype($instance)).','.(is_string($alternateConstructor)?$alternateConstructor:gettype($alternateConstructor)).')');
+        $this->logger->logging('Container::instantiate('.$component->testClassName.','.$this->logger->str($componentName).','.$this->logger->str($declaration).','.$this->logger->str($instance).','.$this->logger->str($alternateConstructor).')');
         if($instance&&$alternateConstructor) {
             $constructor = array($instance,$alternateConstructor);
-            call_user_func($constructor,'foo');
+            if($declaration) {
+                $params = $declaration->getInjects();
+            } elseif($this->alterParams) {
+                $params = $this->alterParams;
+            } else {
+                $params = array();
+            }
+            call_user_func_array($constructor,$params);
         }
         return $this->baseClass;
     }
@@ -70,6 +101,14 @@ class TestComponentDefinition extends ComponentDefinition
         $this->testClassName = $className;
         $this->testName = $name;
     }
+    public function export() {}
+    public function addPropertyWithReference($name,$ref) {}
+    public function addPropertyWithValue($name,$value) {}
+    public function addConstructorArgWithReference($name,$ref) {}
+    public function addConstructorArgWithValue($name,$value) {}
+    public function addMethodDeclaration($methodName) {}
+    public function addMethodDeclarationForce($methodName,$paramName,$reference=null) {}
+
     public function getClassName()
     {
         $this->logger->logging('Definition::getClassName');
@@ -77,12 +116,14 @@ class TestComponentDefinition extends ComponentDefinition
     }
     public function getName()
     {
+        $this->logger->logging('Definition::getName');
         return $this->testName;
     }
 }
 
 class TestAdviceManager extends AdviceManager
 {
+    public $disableLog;
     protected $logger;
     protected $eventManager;
     public function __construct($logger,$eventManager)
@@ -90,16 +131,22 @@ class TestAdviceManager extends AdviceManager
         $this->logger = $logger;
         $this->eventManager = $eventManager;
     }
+    public function logging($text)
+    {
+        if($this->disableLog)
+            return;
+        $this->logger->logging($text);
+    }
     public function getEventManager(JoinPointInterface $joinpoint)
     {
-        $this->logger->logging('AdviceManager::getEventManager('.$joinpoint->getName().')');
-        $this->logger->logging('    event::$action('.$joinpoint->getAction().')');
-        $this->logger->logging('    event::$signature('.$joinpoint->getSignature()->toString().')');
+        $this->logging('AdviceManager::getEventManager('.$joinpoint->getName().')');
+        $this->logging('    event::$action('.$joinpoint->getAction().')');
+        $this->logging('    event::$signature('.$joinpoint->getSignature()->toString().')');
         return $this->eventManager;
     }
     public function inAdvice()
     {
-        $this->logger->logging('AdviceManager::inAdvice');
+        $this->logging('AdviceManager::inAdvice');
         return false;
     }
 }
@@ -108,18 +155,25 @@ class TestEventManager
 {
     public $notfound;
     protected $logger;
+    public $disableLog;
     public function __construct($logger)
     {
         $this->logger = $logger;
     }
+    public function logging($text)
+    {
+        if($this->disableLog)
+            return;
+        $this->logger->logging($text);
+    }
     public function notify($joinpoint,$args,$instance)
     {
-        $this->logger->logging('EventManager::notify('.$joinpoint->getName().','.(is_array($args)?implode(',',$args):gettype($args)).','.(is_object($instance)?get_class($instance):gettype($instance)).')');
+        $this->logging('EventManager::notify('.$joinpoint->getName().','.$this->logger->str($args).','.$this->logger->str($instance).')');
         $params = $joinpoint->getParameters();
-        $this->logger->logging('    event::$action('.$joinpoint->getAction().')');
-        $this->logger->logging('    event::$signature('.$joinpoint->getSignature()->toString().')');
+        $this->logging('    event::$action('.$joinpoint->getAction().')');
+        $this->logging('    event::$signature('.$joinpoint->getSignature()->toString().')');
         if($params)
-            $this->logger->logging('    event::$params('.(is_array($params)?implode(',',$params):gettype($params)).')');
+            $this->logging('    event::$params('.$this->logger->str($params).')');
     }
 
     public function prepareCall($joinpoint)
@@ -131,12 +185,12 @@ class TestEventManager
 
     public function call($joinpoint,$args,$callback,$eventQueue=null)
     {
-        $this->logger->logging('EventManager::call('.$joinpoint->getName().','.gettype($args).','.get_class($callback[0]).'::'.$callback[1].')');
+        $this->logging('EventManager::call('.$joinpoint->getName().','.$this->logger->str($args).','.get_class($callback[0]).'::'.$callback[1].')');
         $params = $joinpoint->getParameters();
-        $this->logger->logging('    event::$action('.$joinpoint->getAction().')');
-        $this->logger->logging('    event::$signature('.$joinpoint->getSignature()->toString().')');
+        $this->logging('    event::$action('.$joinpoint->getAction().')');
+        $this->logging('    event::$signature('.$joinpoint->getSignature()->toString().')');
         if($params)
-            $this->logger->logging('    event::$params('.(is_array($params)?implode(',',$params):gettype($params)).')');
+            $this->logging('    event::$params('.$this->logger->str($params).')');
         return call_user_func_array($callback, $params);
     }
 }
@@ -389,34 +443,34 @@ class Test extends TestCase
         $this->assertEquals('someResult',$result);
         $result = array(
             'Definition::getClassName',
-            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,NULL,NULL,NULL,NULL)',
+            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,null,null,null,null)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(before)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::notify(before,foo,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(before,[foo],'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(around)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::call(around,NULL,'.__NAMESPACE__.'\TestBaseClass::doSomething)',
+            'EventManager::call(around,null,'.__NAMESPACE__.'\TestBaseClass::doSomething)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            '    event::$params(foo)',
+            '    event::$params([foo])',
             'BaseClass::doSomething(foo)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(after-returning)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::notify(after-returning,foo,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(after-returning,[foo],'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
             'AdviceManager::getEventManager(after)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::notify(after,foo,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(after,[foo],'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
         );
@@ -440,12 +494,12 @@ class Test extends TestCase
         $this->assertEquals('someResult',$result);
         $result = array(
             'Definition::getClassName',
-            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,NULL,NULL,NULL,NULL)',
+            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,null,null,null,null)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(before)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::notify(before,foo,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(before,[foo],'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
             'AdviceManager::inAdvice',
@@ -458,13 +512,13 @@ class Test extends TestCase
             'AdviceManager::getEventManager(after-returning)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::notify(after-returning,foo,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(after-returning,[foo],'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
             'AdviceManager::getEventManager(after)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::notify(after,foo,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(after,[foo],'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
         );
@@ -553,19 +607,19 @@ class Test extends TestCase
         $this->assertEquals('someValue',$result);
         $result = array(
             'Definition::getClassName',
-            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,NULL,NULL,NULL,NULL)',
+            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,null,null,null,null)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(before)',
             '    event::$action(get)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::$someVariable)',
-            'EventManager::notify(before,NULL,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(before,null,'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(get)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::$someVariable)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(after)',
             '    event::$action(get)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::$someVariable)',
-            'EventManager::notify(after,NULL,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(after,null,'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(get)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::$someVariable)',
         );
@@ -658,19 +712,19 @@ class Test extends TestCase
 
         $result = array(
             'Definition::getClassName',
-            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,NULL,NULL,NULL,NULL)',
+            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,null,null,null,null)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(before)',
             '    event::$action(set)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::$someVariable)',
-            'EventManager::notify(before,NULL,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(before,null,'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(set)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::$someVariable)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(after)',
             '    event::$action(set)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::$someVariable)',
-            'EventManager::notify(after,NULL,'.__NAMESPACE__.'\TestBaseClass)',
+            'EventManager::notify(after,null,'.__NAMESPACE__.'\TestBaseClass)',
             '    event::$action(set)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::$someVariable)',
         );
@@ -717,7 +771,7 @@ class Test extends TestCase
         $this->assertTrue($res);
         $result = array(
             'Definition::getClassName',
-            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,NULL,NULL,NULL,NULL)',
+            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,null,null,null,null)',
         );
         $this->assertEquals($result,$logger->getLog());
     }
@@ -765,7 +819,7 @@ class Test extends TestCase
 
         $result = array(
             'Definition::getClassName',
-            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,NULL,NULL,NULL,NULL)',
+            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,null,null,null,null)',
         );
         $this->assertEquals($result,$logger->getLog());
     }
@@ -906,34 +960,34 @@ class Test extends TestCase
         $this->assertEquals('someResult',$result);
         $result = array(
             'Definition::getClassName',
-            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,NULL,NULL,'.__NAMESPACE__.'\TestBaseClassIHInterceptor,NULL)',
+            'Container::instantiate('.__NAMESPACE__.'\TestBaseClass,null,null,'.__NAMESPACE__.'\TestBaseClassIHInterceptor,null)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(before)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::notify(before,foo,'.__NAMESPACE__.'\TestBaseClassIHInterceptor)',
+            'EventManager::notify(before,[foo],'.__NAMESPACE__.'\TestBaseClassIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(around)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::call(around,NULL,'.__NAMESPACE__.'\TestBaseClassIHInterceptor::__aop_method_doSomething)',
+            'EventManager::call(around,null,'.__NAMESPACE__.'\TestBaseClassIHInterceptor::__aop_method_doSomething)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            '    event::$params(foo)',
+            '    event::$params([foo])',
             'BaseClass::doSomething(foo)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(after-returning)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::notify(after-returning,foo,'.__NAMESPACE__.'\TestBaseClassIHInterceptor)',
+            'EventManager::notify(after-returning,[foo],'.__NAMESPACE__.'\TestBaseClassIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
             'AdviceManager::getEventManager(after)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
-            'EventManager::notify(after,foo,'.__NAMESPACE__.'\TestBaseClassIHInterceptor)',
+            'EventManager::notify(after,[foo],'.__NAMESPACE__.'\TestBaseClassIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClass::doSomething())',
         );
@@ -1062,7 +1116,7 @@ class Test extends TestCase
         $logger = new TestLogger();
         //$baseClass = new TestBaseClassWithConstructor($logger);
         $baseClass = null;
-        $container = new TestContainer($logger,$baseClass);
+        $container = new TestContainer($logger,$baseClass,array('foo'));
         $component = new TestComponentDefinition($logger,__NAMESPACE__.'\TestBaseClassWithConstructor','testComponent');
         $eventManager = new TestEventManager($logger,$baseClass);
         $adviceManager = new TestAdviceManager($logger,$eventManager);
@@ -1077,34 +1131,34 @@ class Test extends TestCase
         $this->assertEquals('someResult',$result);
         $result = array(
             'Definition::getClassName',
-            'Container::instantiate('.__NAMESPACE__.'\TestBaseClassWithConstructor,NULL,NULL,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor,__aop_construct)',
+            'Container::instantiate('.__NAMESPACE__.'\TestBaseClassWithConstructor,null,null,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor,__aop_construct)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(before)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::notify(before,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(before,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(around)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::call(around,NULL,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method___construct)',
+            'EventManager::call(around,null,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method___construct)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            '    event::$params(foo)',
+            '    event::$params([foo])',
             ////'BaseClass::__construct(foo)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(after-returning)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::notify(after-returning,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after-returning,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
             'AdviceManager::getEventManager(after)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::notify(after,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
 
@@ -1112,29 +1166,29 @@ class Test extends TestCase
             'AdviceManager::getEventManager(before)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            'EventManager::notify(before,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(before,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(around)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            'EventManager::call(around,NULL,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method_doSomething)',
+            'EventManager::call(around,null,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method_doSomething)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            '    event::$params(foo)',
+            '    event::$params([foo])',
             'BaseClass::doSomething(foo)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(after-returning)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            'EventManager::notify(after-returning,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after-returning,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
             'AdviceManager::getEventManager(after)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            'EventManager::notify(after,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
         );
@@ -1143,36 +1197,27 @@ class Test extends TestCase
 
     public function testCreateInheritBasedNonLazy()
     {
+        $logger = new TestLogger();
         $componentName = __NAMESPACE__ . '\BaseClass2';
-        $component = $this->createTestMock('Rindow\Container\ComponentDefinition');
-        $component->expects($this->once())
-                ->method('getClassName')
-                ->will($this->returnValue($componentName));
+        $component = new TestComponentDefinition($logger,$componentName);
 
         $builder = new InterceptorBuilder(RINDOW_TEST_CACHE);
         $builder->buildInterceptor($componentName,'inheritance');
-        //exit;
-        //include_once $builder->getInterceptorFileName($componentName,'inheritance');
-        //echo $builder->getInterceptorDeclare($componentName);
 
-        $container = $this->createTestMock('Rindow\Container\Container');
-        $container->expects($this->once())
-                ->method('instantiate')
-                ->with( $this->equalTo($component),
-                        $this->equalTo(null),
-                        $this->equalTo(null),
-                        $this->callback(function($instance) {
-                            if(get_class($instance)==__NAMESPACE__ . '\BaseClass2IHInterceptor')
-                                return true;
-                            return false;
-                        }),
-                        $this->equalTo('__aop_construct')
-                        );
+        $baseClass = new BaseClass();
+        $container = new TestContainer($logger,$baseClass,array($baseClass));
 
-        $adviceManager = $this->createTestMock('Rindow\Aop\Support\Advice\AdviceManager');
+        $eventManager = new TestEventManager($logger,$baseClass);
+        $eventManager->disableLog = true;
+        $adviceManager = new TestAdviceManager($logger,$eventManager);
+        $adviceManager->disableLog = true;
 
         $interceptorName = $builder->getInterceptorClassName($componentName,'inheritance');
         $interceptor = new $interceptorName($container,$component,$adviceManager);
+        $this->assertEquals(array(
+            'Definition::getClassName',
+            'Container::instantiate('.__NAMESPACE__.'\\BaseClass2,null,null,'.__NAMESPACE__.'\\BaseClass2IHInterceptor,__aop_construct)',
+        ),$logger->getLog());
     }
 /*
     public function testCreateInheritBasedLazy1()
@@ -1367,29 +1412,29 @@ class Test extends TestCase
             'AdviceManager::getEventManager(before)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::notify(before,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(before,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(around)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::call(around,NULL,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method___construct)',
+            'EventManager::call(around,null,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method___construct)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            '    event::$params(foo)',
+            '    event::$params([foo])',
 
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(after-returning)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::notify(after-returning,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after-returning,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
             'AdviceManager::getEventManager(after)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::notify(after,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
         );
@@ -1520,7 +1565,7 @@ class Test extends TestCase
         $interceptorName = $builder->getInterceptorClassName($componentName,'inheritance');
         $interceptor = new $interceptorName($container,$component,$adviceManager,true);
         $this->assertEquals(__NAMESPACE__ . '\BaseClass2IHInterceptor',get_class($interceptor));
-        $this->assertNull($interceptor->foo);
+        $this->assertnull($interceptor->foo);
         $interceptor->getFoo();
         $this->assertEquals(__NAMESPACE__ . '\BaseClass',get_class($interceptor->foo));
     }
@@ -1551,7 +1596,7 @@ class Test extends TestCase
         $interceptorName = $builder->getInterceptorClassName(__NAMESPACE__.'\TestBaseClassWithConstructor','inheritance');
         $interceptor = new $interceptorName($container,$component,$adviceManager,$lazy=true);
         $interceptor->logger = $logger;
-        $this->assertNull($interceptor->foo);
+        $this->assertnull($interceptor->foo);
         $logger->logging('==created==');
 
         $interceptor->doSomething('foo');
@@ -1563,29 +1608,29 @@ class Test extends TestCase
             'AdviceManager::getEventManager(before)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::notify(before,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(before,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(around)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::call(around,NULL,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method___construct)',
+            'EventManager::call(around,null,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method___construct)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            '    event::$params(foo)',
+            '    event::$params([foo])',
 
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(after-returning)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::notify(after-returning,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after-returning,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
             'AdviceManager::getEventManager(after)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
-            'EventManager::notify(after,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::__construct())',
 
@@ -1593,29 +1638,29 @@ class Test extends TestCase
             'AdviceManager::getEventManager(before)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            'EventManager::notify(before,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(before,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(around)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            'EventManager::call(around,NULL,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method_doSomething)',
+            'EventManager::call(around,null,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor::__aop_method_doSomething)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            '    event::$params(foo)',
+            '    event::$params([foo])',
             'BaseClass::doSomething(foo)',
             'AdviceManager::inAdvice',
             'AdviceManager::getEventManager(after-returning)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            'EventManager::notify(after-returning,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after-returning,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
             'AdviceManager::getEventManager(after)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
-            'EventManager::notify(after,foo,'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
+            'EventManager::notify(after,[foo],'.__NAMESPACE__.'\TestBaseClassWithConstructorIHInterceptor)',
             '    event::$action(execution)',
             '    event::$signature('.__NAMESPACE__.'\TestBaseClassWithConstructor::doSomething())',
         );
@@ -1650,7 +1695,7 @@ class Test extends TestCase
         $interceptorName = $builder->getInterceptorClassName($componentName,'inheritance');
         $interceptor = new $interceptorName($container,$component,$adviceManager,true);
         $this->assertEquals(__NAMESPACE__ . '\BaseClass2IHInterceptor',get_class($interceptor));
-        $this->assertNull($interceptor->foo);
+        $this->assertnull($interceptor->foo);
         $interceptor->getFoo();
         $this->assertEquals(__NAMESPACE__ . '\BaseClassIHInterceptor',get_class($interceptor->foo));
     }

@@ -13,7 +13,9 @@ use Rindow\Annotation\AnnotationManager;
 
 use Rindow\Aop\AopManager;
 use Rindow\Aop\SignatureInterface;
+use Rindow\Aop\JoinPointInterface;
 use Rindow\Aop\AdviceInterface;
+
 use Rindow\Aop\Annotation\Pointcut;
 use Rindow\Aop\Annotation\Aspect;
 use Rindow\Aop\Annotation\Before;
@@ -23,6 +25,15 @@ use Rindow\Aop\Annotation\After;
 use Rindow\Aop\Annotation\Around;
 use Rindow\Aop\Support\Signature;
 use Rindow\Aop\Support\JoinPoint\MethodJoinPoint;
+use Rindow\Aop\Support\Intercept\InterceptorBuilder;
+use Rindow\Aop\Support\Pointcut\PointcutManager;
+use Rindow\Aop\Support\Pointcut\Pointcut as PointcutObject;
+use Rindow\Aop\Support\Advice\AdviceManager;
+use Rindow\Aop\Support\Advice\AdviceDefinition;
+use Rindow\Container\ComponentDefinition;
+use Rindow\Container\ComponentDefinitionManager;
+use Rindow\Container\DeclarationManager;
+use Rindow\Container\InstanceManager;
 
 class TestTarget
 {
@@ -105,6 +116,154 @@ class TestEtcAnnotationAspect
     public function foo5($event) {}
 }
 
+class TestLogger
+{
+    public $log = array();
+    public function logging($text)
+    {
+        $this->log[] = $text;
+    }
+    public function getLog()
+    {
+        return $this->log;
+    }
+    public function str($value)
+    {
+        if($value===null) {
+            $strValue = 'null';
+        } elseif(is_bool($value)) {
+            $strValue = $value ? 'true':'false';
+        } elseif(is_object($value)) {
+            $strValue = get_class($value);
+        } elseif(is_array($value)) {
+            $strValue = '['.implode(',',$value).']';
+        } else {
+            $strValue = $value;
+        }
+        return $strValue;
+    }
+}
+
+class TestComponentDefinition extends ComponentDefinition
+{
+    public $logger;
+    public $returnClassName;
+    public $returnName;
+
+    public function __construct($classOrConfig=null,$annotationManager=null) {}
+    public function export() {}
+    public function addPropertyWithReference($name,$ref) {}
+    public function addPropertyWithValue($name,$value) {}
+    public function addConstructorArgWithReference($name,$ref) {}
+    public function addConstructorArgWithValue($name,$value) {}
+    public function addMethodDeclaration($methodName) {}
+    public function addMethodDeclarationForce($methodName,$paramName,$reference=null) {}
+
+    public function getClassName()
+    {
+        $this->logger->logging('ComponentDefinition::getClassName()');
+        return $this->returnClassName;
+    }
+    public function getName()
+    {
+        $this->logger->logging('ComponentDefinition::getName()');
+        return $this->returnName;
+    }
+
+}
+class TestContainer extends Container
+{
+    public $logger;
+    public $returnAnnotationManager;
+    public $returnInstantiate;
+
+    public function __construct(
+        array $config = null,
+        ComponentDefinitionManager $componentManager=null,
+        DeclarationManager $declarationManager=null,
+        InstanceManager $instanceManager=null,
+        $cachePath=null,
+        $configCacheFactory=null) {}
+
+    public function setConfig($config) {}
+    public function setAnnotationManager($annotationManager) {}
+    public function scanComponents() {}
+    public function get($componentName) {}
+    public function has($componentName) {}
+    public function setInstance($componentName,$instance) {}
+
+    public function getAnnotationManager()
+    {
+        $this->logger->logging('Container::getAnnotationManager()');
+        return $this->returnAnnotationManager;
+    }
+
+    public function instantiate(ComponentDefinition $component,$componentName=null,
+        ComponentDefinition $declaration=null,$instance=null,$alternateConstructor=null)
+    {
+        $this->logger->logging(
+            'Container::instantiate(component='.get_class($component).
+                '('.$component->returnClassName.
+            '),componentName='.$componentName.
+            ',declaration='.$this->logger->str($declaration).
+            ',instance='.$this->logger->str($instance).
+            ',alternateConstructor='.$this->logger->str($alternateConstructor).')');
+        return $this->returnInstantiate;
+    }
+}
+class TestInterceptorBuilder extends InterceptorBuilder
+{
+    public $dummyFile;
+    public $logger;
+    public $className;
+
+    public function __construct($filePath=null,$configCacheFactory=null,$config=null) {}
+    public function getCodeStore() {}
+    public function getInterceptorDeclare($className,$mode=null) {}
+    public function getInterfaceBasedInterceptorDeclare($className,$mode) {}
+    public function getInterfaceMethod($methodRef) {}
+    public function getInterfaceStaticMethod($methodRef) {}
+    public function getInheritanceBasedInterceptorDeclare($className,$mode) {}
+    public function getMethodDescribe($methodRef) {}
+
+    public function buildInterceptor($className,$mode)
+    {
+        $this->logger->logging('InterceptorBuilder::buildInterceptor'.
+                                '(className='.$className.',mode='.$this->logger->str($mode).')');
+        if($mode!=null)
+            return;
+        file_put_contents($this->dummyFile,"<?php\n");
+    }
+    public function getInterceptorClassName($className,$mode)
+    {
+        $this->logger->logging('InterceptorBuilder::getInterceptorClassName'.
+                                '(className='.$className.',mode='.$this->logger->str($mode).')');
+        return $this->className;
+    }
+}
+
+class TestPointcutManager extends PointcutManager
+{
+    public function __construct($configCacheFactory=null) {}
+    public function getParser() {}
+    public function register(PointcutObject $pointcut) {}
+    public function existsInSignatureString($signature) {}
+    public function save() {}
+    public function load() {}
+    public function getPointcuts() {}
+    public function find($joinpoint) {}
+    public function generate(SignatureInterface $signature,$pattern,$location=null) {}
+}
+
+class TestAdviceManager extends AdviceManager
+{
+    public function __construct(PointcutManager $pointcutManager=null, $serviceLocator=null, $configCacheFactory=null) {}
+    public function getRepository() {}
+    public function register(AdviceDefinition $advice) {}
+    public function getAdvices(PointcutObject $pointcut) {}
+    public function getEventManager(JoinPointInterface $joinpoint) {}
+
+}
 class Test extends TestCase
 {
     static $RINDOW_TEST_RESOURCES;
@@ -143,17 +302,6 @@ class Test extends TestCase
         return $configCacheFactory;
     }
 
-    public function createTestMock($className,$methods = array(), array $arguments = array())
-    {
-        $args = func_get_args();
-        if(count($args)==0 || count($args)>3)
-            throw new \Exception('illegal mock style');
-        $builder = $this->getMockBuilder($className);
-        $builder->setMethods($methods);
-        $builder->setConstructorArgs($arguments);
-        return $builder->getMock();
-    }
-
     public function testAddPointcut()
     {
         $container = new Container();
@@ -168,7 +316,7 @@ class Test extends TestCase
         $this->assertEquals('test1',$pointcuts['test1']->getSignatureString());
         $this->assertEquals(SignatureInterface::TYPE_LABEL,$pointcuts['test1']->getSignature()->getType());
 
-        // signature 
+        // signature
         $signature = new Signature(
             SignatureInterface::TYPE_METHOD,
             'test1class',
@@ -493,13 +641,13 @@ class Test extends TestCase
         $container = new Container($config);
         $container->setAnnotationManager(new AnnotationManager());
         $aop = new AopManager($container);
-        
+
         $annoName = 'Aspect';
         $className = __NAMESPACE__.'\\TestAnnotationAspect';
         $anno = new Aspect();
         $classRef = new ReflectionClass($className);
         $aop->collectAspect($annoName,$className,$anno,$classRef);
-        
+
         $adviceManager = $aop->getAdviceManager();
         $target = new TestTarget();
         $joinPoint = new MethodJoinPoint($target,'test');
@@ -525,13 +673,13 @@ class Test extends TestCase
         $container = new Container();
         $container->setAnnotationManager(new AnnotationManager());
         $aop = new AopManager($container);
-        
+
         $annoName = 'Aspect';
         $className = __NAMESPACE__.'\\TestEtcAnnotationAspect';
         $anno = new Aspect();
         $classRef = new ReflectionClass($className);
         $aop->collectAspect($annoName,$className,$anno,$classRef);
-        
+
         // @Pointcut(value="")
         $adviceManager = $aop->getAdviceManager();
         $target = new TestTarget();
@@ -611,7 +759,7 @@ class Test extends TestCase
     public function testScanAspectWithCache()
     {
         $configCacheFactory = $this->getConfigCacheFactory();
-        
+
     	$config = array(
     		//'annotation_manager' => true,
     		'component_paths' => array(
@@ -651,38 +799,35 @@ class Test extends TestCase
         $componentName = __NAMESPACE__.'\TestTarget';
         @unlink($dummyFile);
         $config = array('intercept_to_all'=>true);
-        $component = $this->createTestMock('Rindow\Container\ComponentDefinition');
-        $component->expects($this->once())
-                ->method('getClassName')
-                ->will($this->returnValue($componentName));
-        $container = $this->createTestMock('Rindow\Container\Container');
-        $container->expects($this->once())
-                ->method('getAnnotationManager');
-        $interceptorBuilder = $this->createTestMock('Rindow\Aop\Support\Intercept\InterceptorBuilder');
+        $logger = new TestLogger();
+        $component = new TestComponentDefinition();
+        $component->logger = $logger;
+        $component->returnClassName = $componentName;
+        $container = new TestContainer();
+        $container->logger = $logger;
+        $interceptorBuilder = new TestInterceptorBuilder();
+        $interceptorBuilder->logger = $logger;
+        $interceptorBuilder->dummyFile = $dummyFile;
+        $interceptorBuilder->className = __NAMESPACE__.'\TestTargetInterceptorDummy';
         //$interceptorBuilder->expects($this->once())
         //        ->method('getInterceptorFileName')
         //        ->with($this->equalTo($componentName))
         //        ->will($this->returnValue($dummyFile));
-        $interceptorBuilder->expects($this->once())
-                ->method('buildInterceptor')
-                ->with($this->equalTo($componentName),
-                    $this->callback(function($mode) use ($dummyFile) {
-                        if($mode!=null)
-                            return false;
-                        file_put_contents($dummyFile,"<?php\n");
-                        return true;
-                    }));
-        $interceptorBuilder->expects($this->once())
-                ->method('getInterceptorClassName')
-                ->with($this->equalTo($componentName))
-                ->will($this->returnValue(__NAMESPACE__.'\TestTargetInterceptorDummy'));
-        $pointcutManager = $this->createTestMock('Rindow\Aop\Support\Pointcut\PointcutManager');
-        $adviceManager = $this->createTestMock('Rindow\Aop\Support\Advice\AdviceManager');
+        $pointcutManager = new TestPointcutManager();
+        $adviceManager = new TestAdviceManager();
         $aop = new AopManager($container,$pointcutManager,$adviceManager,$interceptorBuilder);
         $aop->setConfig($config);
         $container->setProxyManager($aop);
         $interceptor = $aop->newProxy($container,$component);
         $this->assertEquals(__NAMESPACE__.'\TestTargetInterceptorDummy',get_class($interceptor));
+        $this->assertEquals(array(
+            'Container::getAnnotationManager()',
+            'ComponentDefinition::getName()',
+            'ComponentDefinition::getClassName()',
+            'InterceptorBuilder::buildInterceptor(className='.$componentName.',mode=null)',
+            'InterceptorBuilder::getInterceptorClassName(className='.$componentName.',mode=null)',
+            'ComponentDefinition::getName()',
+        ),$logger->getLog());
     }
 
     public function testNewProxyAspect()
@@ -703,33 +848,29 @@ class Test extends TestCase
                 ),
             ),
         );
-        $component = $this->createTestMock('Rindow\Container\ComponentDefinition');
-        $component->expects($this->any())
-                ->method('getClassName')
-                ->will($this->returnValue($className));
-        $component->expects($this->any())
-                ->method('getName')
-                ->will($this->returnValue($componentName));
-        $container = $this->createTestMock('Rindow\Container\Container');
-        $container->expects($this->once())
-                ->method('getAnnotationManager');
-        $container->expects($this->once())
-                ->method('instantiate')
-                ->with($this->equalTo($component),
-                    $this->equalTo($componentName))
-                ->will($this->returnValue(new $className()));
-        $interceptorBuilder = $this->createTestMock('Rindow\Aop\Support\Intercept\InterceptorBuilder');
+        $logger = new TestLogger();
+        $component = new TestComponentDefinition();
+        $component->logger = $logger;
+        $component->returnClassName = $className;
+        $component->returnName = $componentName;
+        $container = new TestContainer();
+        $container->logger = $logger;
+        $container->returnInstantiate = new $className();
         //$interceptorBuilder->expects($this->never())
         //        ->method('getInterceptorFileName');
-        $interceptorBuilder->expects($this->never())
-                ->method('buildInterceptor');
-        $interceptorBuilder->expects($this->never())
-                ->method('getInterceptorClassName');
+        $interceptorBuilder = new TestInterceptorBuilder();
 
         $aop = new AopManager($container,null,null,$interceptorBuilder);
         $aop->setConfig($config);
         $container->setProxyManager($aop);
         $interceptor = $aop->newProxy($container,$component);
         $this->assertEquals($className,get_class($interceptor));
+        $this->assertEquals(array(
+            'Container::getAnnotationManager()',
+            'ComponentDefinition::getName()',
+            'ComponentDefinition::getName()',
+            'Container::instantiate(component='.__NAMESPACE__.'\TestComponentDefinition('.$className.'),'.
+            'componentName=TestAspect,declaration=null,instance=null,alternateConstructor=null)',
+        ),$logger->getLog());
     }
 }
