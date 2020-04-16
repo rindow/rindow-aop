@@ -55,7 +55,7 @@ class AopManager implements ProxyManager
         if($configCacheFactory)
             $this->configCacheFactory = $configCacheFactory;
         else
-            $this->configCacheFactory = new ConfigCacheFactory(array('enableCache'=>false));
+            $this->configCacheFactory = new ConfigCacheFactory(array('enableCache'=>false,'type'=>'aop'));
         $this->container = $container;
         $this->getAspectCache();
         if($pointcutManager)
@@ -538,7 +538,7 @@ class AopManager implements ProxyManager
         if(!$this->isDebug)
             return;
         $this->debug('aop: AopManager is in active.');
-        
+
         $this->debug('aop: plugins:...');
         foreach ($this->plugins as $plugin) {
             $this->debug('aop:     '.get_class($plugin));

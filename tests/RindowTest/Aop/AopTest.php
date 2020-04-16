@@ -764,6 +764,7 @@ class Test extends TestCase
                     'Rindow\Aop\Module' => true,
                 ),
                 'annotation_manager' => true,
+                'enableCache' => false,
             ),
             'aop' => array(
                 'intercept_to_all' => true,
